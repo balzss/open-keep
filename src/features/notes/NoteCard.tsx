@@ -15,6 +15,7 @@ import { cn } from '@/lib/cn'
 import { byOrder } from '@/lib/order'
 import { useNotesStore } from '@/store/useNotesStore'
 import { useUiStore, type View } from '@/store/useUiStore'
+import { AttachmentBanner } from './AttachmentGrid'
 
 interface NoteCardProps {
   note: Note
@@ -85,6 +86,8 @@ function NoteCardImpl({ note, view }: NoteCardProps) {
           {selected ? <CheckCircle2 size={20} className="text-sky-500" /> : <Circle size={20} />}
         </IconButton>
       </div>
+
+      {note.attachments.length > 0 && <AttachmentBanner attachments={note.attachments} />}
 
       {note.title && (
         <h3 className="mb-2 pr-8 font-medium text-[var(--app-text)] leading-snug">{note.title}</h3>

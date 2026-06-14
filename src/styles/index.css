@@ -47,3 +47,22 @@ body {
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/*
+ * YARL fades its toolbar buttons via a semi-transparent color
+ * (hsla(0,0%,100%,.8)). Lucide icons are multi-stroke SVGs, so when each
+ * stroke gets its own alpha, the crossings double-up and look dark. Force the
+ * stroke color fully opaque and reapply the mute via element opacity (which
+ * applies post-composite — uniform, no overlap darkening).
+ */
+.yarl__button {
+  color: #fff !important;
+  opacity: 0.85;
+}
+.yarl__button:hover,
+.yarl__button:focus-visible {
+  opacity: 1;
+}
+.yarl__button:disabled {
+  opacity: 0.45;
+}

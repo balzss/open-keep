@@ -1,11 +1,19 @@
 import { type DBSchema, type IDBPDatabase, openDB } from 'idb'
-import type { DataSnapshot, ID, Note, Tag } from '@/domain/types'
+import type { AttachmentBlob, AttachmentMeta, DataSnapshot, ID, Note, Tag } from '@/domain/types'
 import { now } from '@/lib/clock'
 import { newId } from '@/lib/id'
+import { blobToBase64, decodeBase64ToBlob } from '@/lib/image'
 import type { Repository } from '../Repository'
 
 const DB_NAME = 'open-keep'
-const DB_VERSION = 1
+const DB_VERSION = 2
+
+/** Row stored in the `attachments` object store. */
+interface AttachmentRow {
+  id: ID
+  mime: string
+  blob: Blob
+}
 
 interface OpenKeepDB extends DBSchema {
   notes: {
@@ -17,6 +25,10 @@ interface OpenKeepDB extends DBSchema {
     key: ID
     value: Tag
   }
+  attachments: {
+    key: ID
+    value: AttachmentRow
+  }
 }
 
 export class IdbRepository implements Repository {
@@ -25,7 +37,7 @@ export class IdbRepository implements Repository {
   async init(): Promise<void> {
     if (this.db) return
     this.db = await openDB<OpenKeepDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion) {
         if (!db.objectStoreNames.contains('notes')) {
           const notes = db.createObjectStore('notes', { keyPath: 'id' })
           notes.createIndex('by-updatedAt', 'updatedAt')
@@ -33,8 +45,28 @@ export class IdbRepository implements Repository {
         if (!db.objectStoreNames.contains('tags')) {
           db.createObjectStore('tags', { keyPath: 'id' })
         }
+        if (oldVersion < 2 && !db.objectStoreNames.contains('attachments')) {
+          db.createObjectStore('attachments', { keyPath: 'id' })
+        }
       },
     })
+    // Backfill `attachments: []` on notes written before v2 so every code path
+    // can assume the array is present. Done outside the upgrade tx so a crash
+    // during the original migration doesn't leave notes half-typed forever.
+    await this.backfillAttachmentsField()
+  }
+
+  private async backfillAttachmentsField(): Promise<void> {
+    const tx = this.conn.transaction('notes', 'readwrite')
+    let cursor = await tx.store.openCursor()
+    while (cursor) {
+      const note = cursor.value
+      if (!Array.isArray(note.attachments)) {
+        await cursor.update({ ...note, attachments: [] })
+      }
+      cursor = await cursor.continue()
+    }
+    await tx.done
   }
 
   private get conn(): IDBPDatabase<OpenKeepDB> {
@@ -60,7 +92,31 @@ export class IdbRepository implements Repository {
   }
 
   async deleteNote(id: ID): Promise<void> {
-    await this.conn.delete('notes', id)
+    // Cascade-delete the note's attachment blobs in the same transaction —
+    // crash mid-delete can't leak orphan blobs the UI can never reach.
+    const tx = this.conn.transaction(['notes', 'attachments'], 'readwrite')
+    const note = await tx.objectStore('notes').get(id)
+    await tx.objectStore('notes').delete(id)
+    if (note) {
+      const attachments = tx.objectStore('attachments')
+      for (const a of note.attachments ?? []) {
+        await attachments.delete(a.id)
+      }
+    }
+    await tx.done
+  }
+
+  async putAttachment(meta: AttachmentMeta, blob: Blob): Promise<void> {
+    await this.conn.put('attachments', { id: meta.id, mime: meta.mime, blob })
+  }
+
+  async getAttachment(id: ID): Promise<Blob | undefined> {
+    const row = await this.conn.get('attachments', id)
+    return row?.blob
+  }
+
+  async deleteAttachment(id: ID): Promise<void> {
+    await this.conn.delete('attachments', id)
   }
 
   async createTag(name: string): Promise<Tag> {
@@ -99,15 +155,40 @@ export class IdbRepository implements Repository {
   }
 
   async export(): Promise<DataSnapshot> {
-    const [notes, tags] = await Promise.all([this.conn.getAll('notes'), this.conn.getAll('tags')])
-    return { notes, tags }
+    const [notes, tags, attachments] = await Promise.all([
+      this.conn.getAll('notes'),
+      this.conn.getAll('tags'),
+      this.conn.getAll('attachments'),
+    ])
+    const serialized: AttachmentBlob[] = await Promise.all(
+      attachments.map(async (row) => ({
+        id: row.id,
+        mime: row.mime,
+        data: await blobToBase64(row.blob),
+      })),
+    )
+    return { notes, tags, attachments: serialized }
   }
 
   async import(data: DataSnapshot): Promise<void> {
-    const tx = this.conn.transaction(['notes', 'tags'], 'readwrite')
-    await Promise.all([tx.objectStore('notes').clear(), tx.objectStore('tags').clear()])
-    for (const note of data.notes) await tx.objectStore('notes').put(note)
+    const tx = this.conn.transaction(['notes', 'tags', 'attachments'], 'readwrite')
+    await Promise.all([
+      tx.objectStore('notes').clear(),
+      tx.objectStore('tags').clear(),
+      tx.objectStore('attachments').clear(),
+    ])
+    for (const note of data.notes) {
+      // Tolerate v1 backups that pre-date the attachments field.
+      await tx.objectStore('notes').put({ ...note, attachments: note.attachments ?? [] })
+    }
     for (const tag of data.tags) await tx.objectStore('tags').put(tag)
+    for (const a of data.attachments ?? []) {
+      await tx.objectStore('attachments').put({
+        id: a.id,
+        mime: a.mime,
+        blob: decodeBase64ToBlob(a.data, a.mime),
+      })
+    }
     await tx.done
   }
 }

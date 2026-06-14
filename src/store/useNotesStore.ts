@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { DataSnapshot, ID, Note, NoteKind, Tag } from '@/domain/types'
 import { now } from '@/lib/clock'
 import { newId } from '@/lib/id'
+import { prepareImage } from '@/lib/image'
 import { orderAtStart, orderBetween } from '@/lib/order'
 import { getRepository } from '@/storage'
 
@@ -40,6 +41,11 @@ interface NotesState {
   /** Bulk operations for selection mode. */
   patchMany: (ids: ID[], changes: Partial<Note>) => Promise<void>
   removeMany: (ids: ID[]) => Promise<void>
+
+  /** Resize+persist an image and append its metadata to the note. */
+  addAttachment: (noteId: ID, file: Blob) => Promise<void>
+  /** Remove an attachment from the note and delete its blob. */
+  removeAttachment: (noteId: ID, attachmentId: ID) => Promise<void>
 
   createTag: (name: string) => Promise<ID>
   renameTag: (id: ID, name: string) => Promise<void>
@@ -148,6 +154,7 @@ export const useNotesStore = create<NotesState>((set, get) => {
         title: '',
         body: '',
         items: [],
+        attachments: [],
         tagIds: [],
         archived: false,
         order: orderAtStart(minOrder),
@@ -261,6 +268,41 @@ export const useNotesStore = create<NotesState>((set, get) => {
           for (const id of ids) if (prev[id]) byId[id] = prev[id]
           return { byId, lastError: err instanceof Error ? err.message : 'Could not delete notes' }
         })
+      }
+    },
+
+    async addAttachment(noteId, file) {
+      const note = get().byId[noteId]
+      if (!note) return
+      try {
+        const prepared = await prepareImage(file)
+        const meta = {
+          id: newId(),
+          mime: prepared.mime,
+          width: prepared.width,
+          height: prepared.height,
+          createdAt: now(),
+        }
+        // Blob first, metadata second — a crash between the two leaves an
+        // orphan blob (cheap, no UI impact) rather than a metadata entry
+        // pointing at nothing (broken thumbnail).
+        await repo.putAttachment(meta, prepared.blob)
+        await patch(noteId, { attachments: [...note.attachments, meta] })
+      } catch (err) {
+        set({ lastError: err instanceof Error ? err.message : 'Could not add image' })
+      }
+    },
+
+    async removeAttachment(noteId, attachmentId) {
+      const note = get().byId[noteId]
+      if (!note) return
+      await patch(noteId, {
+        attachments: note.attachments.filter((a) => a.id !== attachmentId),
+      })
+      try {
+        await repo.deleteAttachment(attachmentId)
+      } catch (err) {
+        set({ lastError: err instanceof Error ? err.message : 'Could not remove image' })
       }
     },
 

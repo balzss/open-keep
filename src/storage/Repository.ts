@@ -1,4 +1,4 @@
-import type { DataSnapshot, ID, Note, Tag } from '@/domain/types'
+import type { AttachmentMeta, DataSnapshot, ID, Note, Tag } from '@/domain/types'
 
 /**
  * Persistence boundary. Every method is async — even the IndexedDB adapter whose
@@ -19,6 +19,12 @@ export interface Repository {
   updateNote(id: ID, patch: Partial<Note>): Promise<Note>
   /** Hard delete (e.g. purge from trash). Soft delete is `updateNote(deletedAt)`. */
   deleteNote(id: ID): Promise<void>
+
+  // Attachments — blobs are kept out of `Note` to avoid loading them with the
+  // full-table scan on app start. `Note.attachments` carries the metadata.
+  putAttachment(meta: AttachmentMeta, blob: Blob): Promise<void>
+  getAttachment(id: ID): Promise<Blob | undefined>
+  deleteAttachment(id: ID): Promise<void>
 
   // Tags
   createTag(name: string): Promise<Tag>

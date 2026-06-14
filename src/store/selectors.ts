@@ -11,9 +11,14 @@ function matches(note: Note, needle: string): boolean {
   return hay.includes(needle)
 }
 
-/** Whether a note carries any real content (title, body, or a non-blank item). */
+/** Whether a note carries any real content (title, body, item, or image). */
 function hasContent(note: Note): boolean {
-  return Boolean(note.title.trim() || note.body.trim() || note.items.some((i) => i.text.trim()))
+  return Boolean(
+    note.title.trim() ||
+      note.body.trim() ||
+      note.items.some((i) => i.text.trim()) ||
+      note.attachments.length > 0,
+  )
 }
 
 function displaySort(a: Note, b: Note): number {

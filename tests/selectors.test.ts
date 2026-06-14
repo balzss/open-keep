@@ -13,6 +13,7 @@ function makeNote(over: Partial<Note> = {}): Note {
     title: `note ${seq}`,
     body: '',
     items: [],
+    attachments: [],
     tagIds: [],
     archived: false,
     order: `a${seq}`,

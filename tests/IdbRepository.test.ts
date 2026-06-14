@@ -12,6 +12,7 @@ function makeNote(over: Partial<Note> = {}): Note {
     title: '',
     body: '',
     items: [],
+    attachments: [],
     tagIds: [],
     archived: false,
     order: orderAtStart(null),
@@ -19,6 +20,10 @@ function makeNote(over: Partial<Note> = {}): Note {
     updatedAt: ts,
     ...over,
   }
+}
+
+function makeBlob(text = 'fake-image-bytes'): Blob {
+  return new Blob([text], { type: 'image/png' })
 }
 
 async function freshRepo(): Promise<IdbRepository> {
@@ -78,6 +83,66 @@ describe('IdbRepository', () => {
     const { notes, tags } = await repo.export()
     expect(tags).toHaveLength(0)
     expect(notes[0].tagIds).toEqual([])
+  })
+
+  it('persists and retrieves attachment blobs', async () => {
+    // fake-indexeddb's structured clone strips Blob prototype methods, so we
+    // can only assert presence here. Real-browser round-trips are covered by
+    // the manual smoke test; the codec is unit-tested in image.test.ts.
+    const aid = newId()
+    await repo.putAttachment(
+      { id: aid, mime: 'image/png', width: 10, height: 5, createdAt: 1 },
+      makeBlob('hello'),
+    )
+    expect(await repo.getAttachment(aid)).toBeDefined()
+  })
+
+  it('cascade-deletes attachment blobs when the note is deleted', async () => {
+    const aid = newId()
+    const note = makeNote({
+      attachments: [{ id: aid, mime: 'image/png', width: 1, height: 1, createdAt: 1 }],
+    })
+    await repo.createNote(note)
+    await repo.putAttachment(
+      { id: aid, mime: 'image/png', width: 1, height: 1, createdAt: 1 },
+      makeBlob(),
+    )
+    expect(await repo.getAttachment(aid)).toBeDefined()
+    await repo.deleteNote(note.id)
+    expect(await repo.getAttachment(aid)).toBeUndefined()
+  })
+
+  it('clears attachments on import', async () => {
+    // Full export/import blob round-trip exercises the base64 codec, which
+    // fake-indexeddb's blob mangling makes impossible to test here. We at
+    // least verify the import path clears prior attachment rows.
+    const aid = newId()
+    await repo.putAttachment(
+      { id: aid, mime: 'image/png', width: 2, height: 2, createdAt: 1 },
+      makeBlob('payload'),
+    )
+    expect(await repo.getAttachment(aid)).toBeDefined()
+    await repo.import({ notes: [], tags: [] })
+    expect(await repo.getAttachment(aid)).toBeUndefined()
+  })
+
+  it('accepts legacy snapshots that pre-date attachments', async () => {
+    // v1 backup: no `attachments` field, notes without `attachments` field.
+    const legacyNote = {
+      id: newId(),
+      kind: 'text' as const,
+      title: 'old',
+      body: '',
+      items: [],
+      tagIds: [],
+      archived: false,
+      order: orderAtStart(null),
+      createdAt: 1,
+      updatedAt: 1,
+    } as unknown as Note
+    await repo.import({ notes: [legacyNote], tags: [] })
+    const back = (await repo.export()).notes[0]
+    expect(back.attachments).toEqual([])
   })
 
   it('round-trips through export/import', async () => {
