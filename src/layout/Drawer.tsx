@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from 'react'
 import { Logo } from '@/components/Logo'
 import { useCreateNote } from '@/features/notes/useCreateNote'
+import { useBackDismiss } from '@/hooks/useBackDismiss'
 import { useIsDesktop } from '@/hooks/useMediaQuery'
 import { cn } from '@/lib/cn'
 import { useTagCounts, useTags } from '@/store/selectors'
@@ -92,7 +93,7 @@ function DrawerContent({ onNavigate }: { onNavigate: () => void }) {
           />
           <DrawerItem
             icon={<ListChecks size={20} />}
-            label="New checklist"
+            label="New list"
             active={false}
             onClick={() => make('checklist')}
           />
@@ -160,6 +161,8 @@ export function Drawer() {
   const isDesktop = useIsDesktop()
   const open = useUiStore((s) => s.drawerOpen)
   const setDrawerOpen = useUiStore((s) => s.setDrawerOpen)
+
+  useBackDismiss(!isDesktop && open, () => setDrawerOpen(false))
 
   if (isDesktop) {
     return (

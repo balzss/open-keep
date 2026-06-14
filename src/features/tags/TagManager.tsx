@@ -29,6 +29,7 @@ function TagRow({ id, name }: { id: string; name: string }) {
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur()
         }}
+        autoComplete="off"
         className="min-w-0 flex-1 bg-transparent py-1 text-[var(--app-text)] text-sm outline-none focus:border-[var(--app-border)] focus:border-b"
       />
       <IconButton
@@ -71,6 +72,7 @@ export function TagManager() {
             if (e.key === 'Enter') add()
           }}
           placeholder="Create new label"
+          autoComplete="off"
           className="min-w-0 flex-1 bg-transparent py-1 text-[var(--app-text)] text-sm outline-none placeholder:text-[var(--app-text-muted)]"
         />
         {draft.trim() && (

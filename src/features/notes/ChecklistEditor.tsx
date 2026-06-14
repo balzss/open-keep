@@ -176,7 +176,8 @@ function SortableRow({
   } = useSortable({ id: item.id })
   const style: CSSProperties = {
     // dnd manages transform (and its transition); we add the collapse transitions.
-    transform: CSS.Translate.toString(transform),
+    // Zero the x component so dragging only moves the row vertically.
+    transform: CSS.Translate.toString(transform ? { ...transform, x: 0 } : null),
     ...collapseStyle(collapsing, transition),
     opacity: isDragging ? 0.5 : collapsing ? 0 : undefined,
   }
@@ -381,7 +382,7 @@ export function ChecklistEditor({ items, onChange }: Props) {
     <div className="text-[var(--app-text)]">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={unchecked.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-          <ul className="space-y-1 md:space-y-0.5">
+          <ul className="space-y-0.5 md:space-y-0">
             {unchecked.map((item) => (
               <SortableRow
                 key={item.id}
@@ -422,7 +423,7 @@ export function ChecklistEditor({ items, onChange }: Props) {
             {checked.length} completed {checked.length === 1 ? 'item' : 'items'}
           </button>
           {showChecked && (
-            <ul className="mt-1 space-y-1 md:space-y-0.5">
+            <ul className="mt-1 space-y-0.5 md:space-y-0">
               {checked.map((item) => (
                 <StaticRow
                   key={item.id}

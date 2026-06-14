@@ -3,6 +3,7 @@ import {
   ArchiveRestore,
   ArrowLeft,
   CheckSquare,
+  Info,
   RotateCcw,
   Tag as TagIcon,
   Trash2,
@@ -14,6 +15,7 @@ import { IconButton } from '@/components/IconButton'
 import type { ChecklistItem, ID, NoteKind } from '@/domain/types'
 import { TagPicker } from '@/features/tags/TagPicker'
 import { useAutosave } from '@/hooks/useAutosave'
+import { useBackDismiss } from '@/hooks/useBackDismiss'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useIsDesktop } from '@/hooks/useMediaQuery'
 import { cn } from '@/lib/cn'
@@ -23,6 +25,7 @@ import { useNote, useTags } from '@/store/selectors'
 import { useNotesStore } from '@/store/useNotesStore'
 import { useUiStore } from '@/store/useUiStore'
 import { ChecklistEditor } from './ChecklistEditor'
+import { NoteInfo } from './NoteInfo'
 
 interface Draft {
   kind: NoteKind
@@ -49,6 +52,7 @@ export function NoteEditor({ id }: { id: ID }) {
     items: note?.items ?? [],
   }))
   const [showTags, setShowTags] = useState(false)
+  const [showInfo, setShowInfo] = useState(false)
   const allTags = useTags()
 
   useAutosave(draft, (d) => updateNote(id, d))
@@ -75,7 +79,12 @@ export function NoteEditor({ id }: { id: ID }) {
     if (!note) closeEditor()
   }, [note, closeEditor])
 
-  useEscapeKey(closeEditor)
+  useEscapeKey(
+    showTags ? () => setShowTags(false) : showInfo ? () => setShowInfo(false) : closeEditor,
+  )
+  useBackDismiss(true, closeEditor)
+  useBackDismiss(showTags, () => setShowTags(false))
+  useBackDismiss(showInfo, () => setShowInfo(false))
 
   if (!note) return null
 
@@ -181,15 +190,45 @@ export function NoteEditor({ id }: { id: ID }) {
 
         {/* Tag popover */}
         {showTags && (
-          <div className="mx-2 mb-1 rounded-lg bg-[var(--app-surface)] p-3 shadow-lg ring-1 ring-[var(--app-border)]">
+          <div
+            role="dialog"
+            aria-label="Labels"
+            onBlur={(e) => {
+              // Close when focus leaves the popover entirely. relatedTarget is
+              // the element receiving focus; null means it went to body (click
+              // outside / tap on non-focusable area).
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                setShowTags(false)
+              }
+            }}
+            className="mx-2 mb-1 rounded-lg bg-[var(--app-surface)] p-3 shadow-lg ring-1 ring-[var(--app-border)]"
+          >
             <TagPicker noteId={id} />
+          </div>
+        )}
+
+        {/* Info popover */}
+        {showInfo && (
+          <div
+            role="dialog"
+            aria-label="Note info"
+            tabIndex={-1}
+            ref={(el) => el?.focus()}
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                setShowInfo(false)
+              }
+            }}
+            className="mx-2 mb-1 rounded-lg bg-[var(--app-surface)] p-3 shadow-lg outline-none ring-1 ring-[var(--app-border)]"
+          >
+            <NoteInfo noteId={id} />
           </div>
         )}
 
         {/* Action bar. Fold the mobile safe-area inset into the bottom padding
             rather than using .pb-safe, which (defined after Tailwind) would win
             over md:pb-3 and leave the desktop card with no bottom padding. */}
-        <div className="flex items-center gap-2 px-2 pt-3 pb-[calc(env(safe-area-inset-bottom)_+_0.375rem)] md:gap-0.5 md:pb-3">
+        <div className="flex items-center gap-2 px-2 pt-3 pb-[calc(env(safe-area-inset-bottom)_+_0.375rem)] md:pb-3">
           <div className="flex-1" />
           {trashed ? (
             <>
@@ -198,6 +237,14 @@ export function NoteEditor({ id }: { id: ID }) {
               </IconButton>
               <IconButton label="Delete forever" size="sm" onClick={after(() => deleteForever(id))}>
                 <Trash2 size={20} />
+              </IconButton>
+              <IconButton
+                label="Note info"
+                size="sm"
+                active={showInfo}
+                onClick={() => setShowInfo((v) => !v)}
+              >
+                <Info size={20} />
               </IconButton>
             </>
           ) : (
@@ -228,6 +275,14 @@ export function NoteEditor({ id }: { id: ID }) {
               </IconButton>
               <IconButton label="Move to trash" size="sm" onClick={after(() => trashNote(id))}>
                 <Trash2 size={20} />
+              </IconButton>
+              <IconButton
+                label="Note info"
+                size="sm"
+                active={showInfo}
+                onClick={() => setShowInfo((v) => !v)}
+              >
+                <Info size={20} />
               </IconButton>
             </>
           )}

@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useBackDismiss } from '@/hooks/useBackDismiss'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { cn } from '@/lib/cn'
 import { IconButton } from './IconButton'
@@ -15,6 +16,7 @@ interface ModalProps {
 /** Bottom-sheet on mobile, centered card on desktop. Closes on Escape or backdrop tap. */
 export function Modal({ title, onClose, children, panelClassName }: ModalProps) {
   useEscapeKey(onClose)
+  useBackDismiss(true, onClose)
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center">
       <button

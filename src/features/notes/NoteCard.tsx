@@ -137,7 +137,7 @@ function NoteCardImpl({ note, view }: NoteCardProps) {
        */}
       <div
         className={cn(
-          'mt-2 flex justify-end gap-2 transition-opacity -mb-2 -mr-2 md:gap-0.5',
+          'mt-2 flex justify-end gap-2 transition-opacity -mb-2 -mr-2',
           selectionMode ? 'invisible' : REVEAL_ON_HOVER,
         )}
       >

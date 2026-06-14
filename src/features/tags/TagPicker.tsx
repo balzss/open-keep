@@ -1,5 +1,5 @@
 import { Check, Plus, Search } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ID } from '@/domain/types'
 import { cn } from '@/lib/cn'
 import { useNote, useTags } from '@/store/selectors'
@@ -12,6 +12,12 @@ export function TagPicker({ noteId }: { noteId: ID }) {
   const toggleNoteTag = useNotesStore((s) => s.toggleNoteTag)
   const createTag = useNotesStore((s) => s.createTag)
   const [query, setQuery] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Focus the search input on open so blur fires when focus leaves the popover.
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
 
   if (!note) return null
   const q = query.trim()
@@ -31,13 +37,21 @@ export function TagPicker({ noteId }: { noteId: ID }) {
       <div className="mb-2 flex items-center gap-2 rounded-md bg-[var(--app-surface-2)] px-2 py-1.5">
         <Search size={16} className="shrink-0 text-[var(--app-text-muted)]" />
         <input
+          ref={inputRef}
+          // type="search" so Android Chrome's password manager never offers to
+          // autofill saved credentials here.
+          type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') create()
           }}
           placeholder="Enter label name"
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--app-text-muted)]"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--app-text-muted)] [&::-webkit-search-cancel-button]:hidden"
         />
       </div>
 

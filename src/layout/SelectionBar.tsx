@@ -2,6 +2,7 @@ import { Archive, ArchiveRestore, RotateCcw, Trash2, X } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { IconButton } from '@/components/IconButton'
 import type { ID } from '@/domain/types'
+import { useBackDismiss } from '@/hooks/useBackDismiss'
 import { now } from '@/lib/clock'
 import { useNotesStore } from '@/store/useNotesStore'
 import { useUiStore, type View } from '@/store/useUiStore'
@@ -19,6 +20,8 @@ export function SelectionBar() {
   const view = useUiStore((s) => s.view)
   const patchMany = useNotesStore((s) => s.patchMany)
   const removeMany = useNotesStore((s) => s.removeMany)
+
+  useBackDismiss(true, clearSelection)
 
   const ids = [...selection]
 
